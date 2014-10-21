@@ -3,6 +3,7 @@ using System.Web;
 using System.Web.Caching;
 using CoffeeScript;
 using System.Configuration;
+using System.IO;
 
 namespace CoffeeScript
 {
@@ -20,9 +21,9 @@ namespace CoffeeScript
         public CoffeeScriptHttpHandler()
         {
             var _scriptPath = GetConfig("coffee-script.path", null);
-            _engine = new CScriptEngine(_scriptPath != null 
+            _engine = new CScriptEngine(_scriptPath != null
                 ? Loader.FromFile(_scriptPath) : Loader.Default());
-            
+
             var exepath = GetConfig("coffee-script.cscriptPath", null);
             if (exepath != null)
                 _engine.ExePath = exepath;
@@ -34,7 +35,20 @@ namespace CoffeeScript
 
         public void ProcessRequest(HttpContext context)
         {
-            var jscript = _engine.Compile(context.Request.PhysicalPath);
+            var coffeescriptFile = context.Request.PhysicalPath;
+            var cachejsFile = coffeescriptFile + ".jscoffee";
+            var jscript = "";
+            if (File.Exists(cachejsFile) &&
+             new FileInfo(cachejsFile).LastWriteTimeUtc == new FileInfo(coffeescriptFile).LastWriteTimeUtc)
+            {
+                jscript = File.ReadAllText(cachejsFile);
+            }
+            else
+            {
+                jscript = _engine.Compile(coffeescriptFile);
+                File.WriteAllText(cachejsFile, jscript);
+                new FileInfo(cachejsFile).LastWriteTimeUtc = new FileInfo(coffeescriptFile).LastWriteTimeUtc;
+            }
 
             context.Response.AddFileDependency(context.Request.PhysicalPath);
             var cache = context.Response.Cache;
